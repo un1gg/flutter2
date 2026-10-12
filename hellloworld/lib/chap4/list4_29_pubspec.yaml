@@ -1,0 +1,9 @@
+dependencies:
+  firebase_core: ^2.32.0
+  firebase_auth: ^4.20.0
+  google_sign_in: ^6.3.0
+  cloud_firestore: ^4.17.5
+  firebase_messaging: ^14.9.0
+  flutter_local_notifications: ^17.2.1
+  # リスト4.29
+  firebase_in_app_messaging: ^0.7.5+7

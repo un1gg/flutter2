@@ -1,0 +1,6 @@
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # リスト2.14
+  font_awesome_flutter: ^10.1.0

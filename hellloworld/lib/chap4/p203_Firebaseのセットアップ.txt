@@ -1,0 +1,34 @@
+1. P200～P202 Firebaseプロジェクトを作成
+
+2. P203 Node.js/npmのインストール（インストールされていない場合のみ）
+  以下のリンクより「Windowsインストーラー（.msi）」をダウンロードしインストール
+  https://nodejs.org/ja/download
+
+3. P204 firebase-toolsのインストール
+  ターミナルで以下のコマンドを実行
+  npm install -g firebase-tools
+
+4. P204 コマンドラインでFirebaseにログイン
+  ターミナルで以下のコマンドを実行
+  firebase login
+  実行後、ブラウザにてプロジェクトを作成したアカウントでログイン
+
+5. P205 flutterfire_cliのインストール
+  ターミナルで以下のコマンドを実行
+  dart pub global activate flutterfire_cli
+
+6. P205 システム環境変数のPathに以下の内容を追加
+  C:\\Users\{ユーザー名}\AppData\Local\Pub\Cache\bin
+  完了後、ターミナルを再起動
+
+7. P205 コマンドラインでプロジェクトに紐づけ
+  VSCodeでFlutterプロジェクトを開き、ターミナルで以下のコマンドを実行
+  flutterfire configure
+  実行後、作成したプロジェクトを選択
+  プラットフォームは「android」と「web」のみを選択（スペースキーで選択できます）
+  ※ 教科書通りのコマンドの場合はfirebaseのプロジェクト名ではなくプロジェクトIDを指定
+
+8. pubspec.yamlを編集
+  以下を追記
+dependencies:
+  firebase_core: ^2.32.0

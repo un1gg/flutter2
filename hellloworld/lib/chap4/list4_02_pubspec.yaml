@@ -1,0 +1,4 @@
+dependencies:
+  firebase_core: ^2.32.0
+  # リスト4.2
+  firebase_auth: ^4.20.0

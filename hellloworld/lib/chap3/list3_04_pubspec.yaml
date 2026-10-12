@@ -1,0 +1,6 @@
+dependencies:
+  flutter:
+    sdk: flutter
+  image_picker: ^1.2.3
+  # リスト3.4
+  video_player: ^2.11.1
