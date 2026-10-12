@@ -58,7 +58,6 @@ dependencies:
   # リスト3.11
   flutter_tts: ^4.2.5
   # リスト3.16
-  # speech_to_text: ^6.6.2  # Androidビルドエラーのため一時無効化
   # リスト4.26
   firebase_messaging: ^14.9.0
   flutter_local_notifications: ^17.2.1
@@ -72,7 +71,7 @@ dependencies:
     # リスト5.1
   flutter_launcher_icons: ^0.14.4
   font_awesome_flutter: ^11.0.0
-  speech_to_text: ^6.6.2
+  speech_to_text: 7.0.0
 
 flutter_icons:
   android: true
