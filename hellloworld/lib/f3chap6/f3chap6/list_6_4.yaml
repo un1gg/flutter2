@@ -1,0 +1,4 @@
+# リスト6-4
+flutter:
+  assets:
+    - assets/documents/data.txt

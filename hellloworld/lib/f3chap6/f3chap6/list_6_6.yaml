@@ -1,0 +1,6 @@
+# リスト6-6
+dependencies:
+  flutter:
+    sdk: flutter
+  path_provider: any
+  shared_preferences: any

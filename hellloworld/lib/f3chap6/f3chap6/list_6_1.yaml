@@ -1,0 +1,6 @@
+# リスト6-1
+dependencies:
+  flutter:
+    sdk: flutter
+  # バージョン指定をanyにすることで自動で最適なバージョンが選択されます
+  path_provider: any
