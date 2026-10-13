@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function validUser(data) {
+      return data.keys().hasAll(['loginId', 'createdAt'])
+        && data.keys().hasOnly(['loginId', 'createdAt'])
+        && data.loginId is string
+        && data.loginId.size() > 0
+        && data.loginId.size() <= 32
+        && data.createdAt is timestamp;
+    }
+    function validTodo(data) {
+      return data.keys().hasAll([
+          'userId', 'title', 'scheduledAt', 'detail',
+          'createdAt', 'updatedAt', 'isCompleted'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'title', 'scheduledAt', 'detail',
+          'createdAt', 'updatedAt', 'isCompleted'
+        ])
+        && data.userId is string
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 100
+        && data.detail is string
+        && data.detail.size() <= 1000
+        && data.scheduledAt is timestamp
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.isCompleted is bool;
+    }
+    match /users/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn() && request.auth.uid == userId
+        && validUser(request.resource.data);
+      allow update: if signedIn() && request.auth.uid == userId
+        && validUser(request.resource.data)
+        && request.resource.data.loginId == resource.data.loginId
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+    match /todos/{todoId} {
+      allow read, delete: if signedIn()
+        && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && validTodo(request.resource.data)
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && validTodo(request.resource.data)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+  }
+}

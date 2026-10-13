@@ -1,10 +1,31 @@
 import 'dart:convert';
-import 'dart:isolate';
-import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
-import 'package:path/path.dart' as path;
-import 'package:sqflite/sqflite.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+class AppUser {
+  const AppUser({
+    required this.id,
+    required this.loginId,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String loginId;
+  final DateTime createdAt;
+
+  factory AppUser.fromMap(String id, Map<String, dynamic> data) => AppUser(
+    id: id,
+    loginId: data['loginId'] as String,
+    createdAt: (data['createdAt'] as Timestamp).toDate(),
+  );
+
+  Map<String, dynamic> toMap() => {
+    'loginId': loginId,
+    'createdAt': Timestamp.fromDate(createdAt),
+  };
+}
 
 class Todo {
   const Todo({
@@ -27,169 +48,179 @@ class Todo {
   final DateTime updatedAt;
   final bool isCompleted;
 
-  factory Todo.fromMap(Map<String, Object?> map) => Todo(
-        id: map['todoId'] as String,
-        userId: map['userId'] as String,
-        title: map['title'] as String,
-        scheduledAt: DateTime.parse(map['scheduledAt'] as String),
-        detail: map['detail'] as String,
-        createdAt: DateTime.parse(map['createdAt'] as String),
-        updatedAt: DateTime.parse(map['updatedAt'] as String),
-        isCompleted: map['isCompleted'] == 1,
-      );
+  factory Todo.fromMap(String id, Map<String, dynamic> data) => Todo(
+    id: id,
+    userId: data['userId'] as String,
+    title: data['title'] as String,
+    scheduledAt: (data['scheduledAt'] as Timestamp).toDate(),
+    detail: data['detail'] as String,
+    createdAt: (data['createdAt'] as Timestamp).toDate(),
+    updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+    isCompleted: data['isCompleted'] as bool,
+  );
 }
 
 class TodoRepository {
-  TodoRepository._(this.db);
+  TodoRepository._(this.auth, this.firestore);
 
-  final Database db;
+  final FirebaseAuth auth;
+  final FirebaseFirestore firestore;
 
   static Future<TodoRepository> open() async {
-    final database = await openDatabase(
-      path.join(await getDatabasesPath(), 'todo_app.db'),
-      version: 1,
-      onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE users (
-            userId TEXT PRIMARY KEY,
-            loginId TEXT NOT NULL UNIQUE,
-            passwordHash TEXT NOT NULL,
-            createdAt TEXT NOT NULL
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE todos (
-            todoId TEXT PRIMARY KEY,
-            userId TEXT NOT NULL REFERENCES users(userId) ON DELETE CASCADE,
-            title TEXT NOT NULL,
-            scheduledAt TEXT NOT NULL,
-            detail TEXT NOT NULL DEFAULT '',
-            createdAt TEXT NOT NULL,
-            updatedAt TEXT NOT NULL,
-            isCompleted INTEGER NOT NULL DEFAULT 0 CHECK(isCompleted IN (0, 1))
-          )
-        ''');
-        await db.execute('CREATE INDEX todos_user_created ON todos(userId, createdAt DESC)');
-      },
+    final repository = TodoRepository._(
+      FirebaseAuth.instance,
+      FirebaseFirestore.instance,
     );
-    return TodoRepository._(database);
+    await repository.auth.signOut();
+    return repository;
   }
 
-  Future<String> register(String inputId, String password) async {
-    final loginId = inputId.trim();
-    if (loginId.isEmpty || loginId.length > 32 || password.length < 6 || password.length > 64) {
-      throw const FormatException('IDは1〜32文字、パスワードは6〜64文字で入力してください。');
+  String _loginId(String input) {
+    final id = input.trim();
+    if (id.isEmpty || id.length > 32) {
+      throw const FormatException('IDは1〜32文字で入力してください。');
     }
-    final existing = await db.query('users', columns: ['userId'], where: 'loginId = ?', whereArgs: [loginId], limit: 1);
-    if (existing.isNotEmpty) {
-      throw const FormatException('このIDはすでに使われています。');
+    return id;
+  }
+
+  String _email(String id) =>
+      '${sha256.convert(utf8.encode(id))}@todo.example.com';
+
+  Future<AppUser> register(String inputId, String password) async {
+    final id = _loginId(inputId);
+    if (password.length < 6 || password.length > 64) {
+      throw const FormatException('パスワードは6〜64文字で入力してください。');
     }
-    final salt = _randomHex();
-    final digest = await Isolate.run(() => _derivePassword(password, salt));
-    final userId = _randomHex();
+    final credential = await auth.createUserWithEmailAndPassword(
+      email: _email(id),
+      password: password,
+    );
+    final user = credential.user!;
+    final profile = AppUser(
+      id: user.uid,
+      loginId: id,
+      createdAt: DateTime.now(),
+    );
     try {
-      await db.insert('users', {
-        'userId': userId,
-        'loginId': loginId,
-        'passwordHash': '$salt:$digest',
-        'createdAt': DateTime.now().toUtc().toIso8601String(),
-      });
-    } on DatabaseException catch (error) {
-      if (error.isUniqueConstraintError()) {
-        throw const FormatException('このIDはすでに使われています。');
+      await firestore.collection('users').doc(user.uid).set(profile.toMap());
+      return profile;
+    } catch (_) {
+      await auth.signOut();
+      throw const FormatException(
+        '認証アカウントは作成されましたが、ユーザー情報の保存に失敗しました。'
+        'Firestoreの設定とルールを確認してから、同じIDでログインしてください。',
+      );
+    }
+  }
+
+  Future<AppUser> login(String inputId, String password) async {
+    final id = _loginId(inputId);
+    try {
+      final credential = await auth.signInWithEmailAndPassword(
+        email: _email(id),
+        password: password,
+      );
+      final user = credential.user!;
+      final ref = firestore.collection('users').doc(user.uid);
+      final snapshot = await ref.get(const GetOptions(source: Source.server));
+      if (snapshot.exists) {
+        return AppUser.fromMap(user.uid, snapshot.data()!);
       }
+      final profile = AppUser(
+        id: user.uid,
+        loginId: id,
+        createdAt: user.metadata.creationTime ?? DateTime.now(),
+      );
+      await ref.set(profile.toMap());
+      return profile;
+    } catch (_) {
+      await auth.signOut();
       rethrow;
     }
-    return userId;
   }
 
-  Future<String> login(String inputId, String password) async {
-    final rows = await db.query('users', where: 'loginId = ?', whereArgs: [inputId.trim()], limit: 1);
-    if (rows.isEmpty) {
-      throw const FormatException('IDまたはパスワードが違います。');
+  Future<void> logout() => auth.signOut();
+
+  void _checkUser(String userId) {
+    if (auth.currentUser?.uid != userId) {
+      throw const FormatException('ログインし直してください。');
     }
-    final stored = rows.single['passwordHash'] as String;
-    final parts = stored.split(':');
-    final digest = await Isolate.run(() => _derivePassword(password, parts.first));
-    if (parts.length != 2 || !_sameDigest(digest, parts.last)) {
-      throw const FormatException('IDまたはパスワードが違います。');
-    }
-    return rows.single['userId'] as String;
   }
 
   Future<List<Todo>> list(String userId) async {
-    final rows = await db.query('todos', where: 'userId = ?', whereArgs: [userId], orderBy: 'createdAt DESC, rowid DESC');
-    return rows.map(Todo.fromMap).toList();
+    _checkUser(userId);
+    final snapshot = await firestore
+        .collection('todos')
+        .where('userId', isEqualTo: userId)
+        .get(const GetOptions(source: Source.server));
+    final todos = snapshot.docs
+        .map((doc) => Todo.fromMap(doc.id, doc.data()))
+        .toList();
+    todos.sort((a, b) {
+      final order = b.createdAt.compareTo(a.createdAt);
+      return order == 0 ? b.id.compareTo(a.id) : order;
+    });
+    return todos;
   }
 
-  Future<void> save({required String userId, String? todoId, required String title, required DateTime scheduledAt, required String detail}) async {
+  Future<Todo> save({
+    required String userId,
+    Todo? todo,
+    required String title,
+    required DateTime scheduledAt,
+    required String detail,
+  }) async {
+    _checkUser(userId);
     final cleanTitle = title.trim();
     final cleanDetail = detail.trim();
-    if (cleanTitle.isEmpty || cleanTitle.length > 100 || cleanDetail.length > 1000) {
-      throw const FormatException('タイトルは1〜100文字、詳細は1000文字以内で入力してください。');
+    if (cleanTitle.isEmpty || cleanTitle.length > 100 ||
+        cleanDetail.length > 1000) {
+      throw const FormatException(
+        'タイトルは1〜100文字、詳細は1000文字以内で入力してください。',
+      );
     }
-    final timestamp = DateTime.now().toUtc().toIso8601String();
-    if (todoId == null) {
-      await db.insert('todos', {
-        'todoId': _randomHex(),
+    final data = <String, dynamic>{
+      'title': cleanTitle,
+      'scheduledAt': Timestamp.fromDate(scheduledAt),
+      'detail': cleanDetail,
+      'updatedAt': Timestamp.now(),
+    };
+    final ref = todo == null
+        ? firestore.collection('todos').doc()
+        : firestore.collection('todos').doc(todo.id);
+    final createdAt = todo?.createdAt ?? DateTime.now();
+    if (todo == null) {
+      await ref.set({
+        ...data,
         'userId': userId,
-        'title': cleanTitle,
-        'scheduledAt': scheduledAt.toIso8601String(),
-        'detail': cleanDetail,
-        'createdAt': timestamp,
-        'updatedAt': timestamp,
-        'isCompleted': 0,
+        'createdAt': Timestamp.fromDate(createdAt),
+        'isCompleted': false,
       });
     } else {
-      final count = await db.update('todos', {
-        'title': cleanTitle,
-        'scheduledAt': scheduledAt.toIso8601String(),
-        'detail': cleanDetail,
-        'updatedAt': timestamp,
-      }, where: 'todoId = ? AND userId = ?', whereArgs: [todoId, userId]);
-      if (count == 0) throw const FormatException('ToDoが見つかりません。');
+      await ref.update(data);
     }
+    return Todo(
+      id: ref.id,
+      userId: userId,
+      title: cleanTitle,
+      scheduledAt: scheduledAt,
+      detail: cleanDetail,
+      createdAt: createdAt,
+      updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+      isCompleted: todo?.isCompleted ?? false,
+    );
   }
 
   Future<void> toggle(String userId, Todo todo) async {
-    final count = await db.update('todos', {
-      'isCompleted': todo.isCompleted ? 0 : 1,
-      'updatedAt': DateTime.now().toUtc().toIso8601String(),
-    }, where: 'todoId = ? AND userId = ?', whereArgs: [todo.id, userId]);
-    if (count == 0) throw const FormatException('ToDoが見つかりません。');
+    _checkUser(userId);
+    await firestore.collection('todos').doc(todo.id).update({
+      'isCompleted': !todo.isCompleted,
+      'updatedAt': Timestamp.now(),
+    });
   }
 
   Future<void> delete(String userId, String todoId) async {
-    final count = await db.delete('todos', where: 'todoId = ? AND userId = ?', whereArgs: [todoId, userId]);
-    if (count == 0) throw const FormatException('ToDoが見つかりません。');
+    _checkUser(userId);
+    await firestore.collection('todos').doc(todoId).delete();
   }
-}
-
-String _randomHex() {
-  final random = Random.secure();
-  return List<int>.generate(16, (_) => random.nextInt(256)).map((value) => value.toRadixString(16).padLeft(2, '0')).join();
-}
-
-String _derivePassword(String password, String saltHex) {
-  final salt = <int>[for (var i = 0; i < saltHex.length; i += 2) int.parse(saltHex.substring(i, i + 2), radix: 16)];
-  final mac = Hmac(sha256, utf8.encode(password));
-  var block = mac.convert([...salt, 0, 0, 0, 1]).bytes;
-  final result = List<int>.from(block);
-  for (var iteration = 1; iteration < 120000; iteration++) {
-    block = mac.convert(block).bytes;
-    for (var i = 0; i < result.length; i++) {
-      result[i] ^= block[i];
-    }
-  }
-  return result.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
-}
-
-bool _sameDigest(String actual, String expected) {
-  var diff = actual.length ^ expected.length;
-  final count = actual.length < expected.length ? actual.length : expected.length;
-  for (var i = 0; i < count; i++) {
-    diff |= actual.codeUnitAt(i) ^ expected.codeUnitAt(i);
-  }
-  return diff == 0;
 }
