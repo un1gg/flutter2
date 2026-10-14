@@ -1,4 +1,7 @@
-part of 'main.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'todo_store.dart';
+import 'todo_utils.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key, required this.store});
