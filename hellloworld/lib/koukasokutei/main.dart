@@ -5,11 +5,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'todo_repository.dart';
 import 'firebase_options.dart';
 
-part 'ToDo_login_page.dart';
-part 'ToDo_register_page.dart';
-part 'ToDo_my_page.dart';
-part 'ToDo_detail_page.dart';
-part 'ToDo_input_page.dart';
+part 'login_page.dart';
+part 'register_page.dart';
+part 'my_page.dart';
+part 'todo_detail_page.dart';
+part 'todo_input_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
