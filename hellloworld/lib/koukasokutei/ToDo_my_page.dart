@@ -1,4 +1,8 @@
-part of 'main.dart';
+import 'package:flutter/material.dart';
+import 'todo_store.dart';
+import 'todo_utils.dart';
+import 'ToDo_detail_page.dart';
+import 'ToDo_input_page.dart';
 
 class MyPage extends StatelessWidget {
   const MyPage({super.key, required this.store});
