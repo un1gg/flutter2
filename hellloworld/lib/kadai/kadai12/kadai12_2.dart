@@ -171,7 +171,7 @@ class _MyHomePageState extends State<MyHomePage> {
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: '都道府県'),
-              value: _selectedPrefecture,
+              initialValue: _selectedPrefecture,
               items: _prefectures.map((pref) {
                 return DropdownMenuItem(
                   value: pref,
