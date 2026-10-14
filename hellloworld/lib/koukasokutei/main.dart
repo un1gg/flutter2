@@ -4,8 +4,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'todo_repository.dart';
 import 'todo_store.dart';
-import 'ToDo_login_page.dart';
-import 'ToDo_my_page.dart';
+import 'todo_login_page.dart';
+import 'todo_my_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
